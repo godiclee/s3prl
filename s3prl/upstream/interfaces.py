@@ -170,6 +170,19 @@ class Featurizer(nn.Module):
         self.normalize = normalize
 
         feature = self._select_feature(paired_features)
+        
+        # Add Layer Adapter
+        self.hidden_dim = feature[0].size(-1)
+        self.output_dim = 512
+        self.L_adapters = [
+            nn.Sequential(
+                nn.Linear(self.hidden_dim, self.output_dim),
+                nn.ReLU(),
+                nn.LayerNorm(self.output_dim),
+            ) for _ in range(len(feature))
+        ]
+        self.L_adapters = nn.ModuleList(self.L_adapters)
+
         if isinstance(feature, (list, tuple)):
             self.layer_num = len(feature)
             show(
@@ -181,7 +194,7 @@ class Featurizer(nn.Module):
         else:
             feature = feature.cpu()
 
-        self.output_dim = feature.size(-1)
+        #self.output_dim = feature.size(-1)
         if hasattr(upstream, "get_downsample_rates"):
             self.downsample_rate = upstream.get_downsample_rates(feature_selection)
             show(
@@ -266,6 +279,8 @@ class Featurizer(nn.Module):
         paired_features: Dict[str, Union[Tensor, List[Tensor], Dict[str, Tensor]]],
     ):
         feature = self._select_feature(paired_features)
+        # Add Layer Adapter
+        feature = [self.L_adapters[i](feature[i]) for i in range(len(feature))]
         if isinstance(feature, (list, tuple)):
             feature = self._weighted_sum(feature)
 
